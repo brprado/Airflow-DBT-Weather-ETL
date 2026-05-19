@@ -1,3 +1,4 @@
+from typing import final
 from api_requests import mock_fetch_data
 import psycopg2
 
@@ -42,10 +43,56 @@ def create_table(conn):
         print(f"There was an error while creating the table - {e}")
 
 
-def insert_records():
-    pass
+def insert_records(conn, data):
+    """Insere dados climáticos na tabela raw_weather_data."""
 
-if __name__ == "__main__":
-    conn = connect_to_db()
-    create_table(conn=conn)
+    print("Inserting data into the table...")
+    try:
+        weather = data.get("current", {})
+        location = data.get("location", {})
 
+        query = """
+            INSERT INTO dev.raw_weather_data (
+                city,
+                temperature,
+                weather_description,
+                wind_speed,
+                time,
+                inserted_at,
+                utc_offset
+            )
+            VALUES (%s, %s, %s, %s, %s, NOW(), %s)
+        """
+
+        values = (
+            location.get("name"),
+            weather.get("temperature"),
+            weather.get("weather_descriptions", [None])[0],
+            weather.get("wind_speed"),
+            location.get("localtime"),
+            location.get("utc_offset"),
+        )
+
+        with conn.cursor() as cursor:
+            cursor.execute(query, values)
+
+        conn.commit()
+    except psycopg2.Error as e:
+        print("Error inserting data into the table", e)
+
+    print("Data inserted successfully.")
+
+def main():
+    try:
+        data = mock_fetch_data()
+        conn = connect_to_db()
+        create_table(conn=conn)
+        insert_records(conn, data)
+    except Exception as e:
+        print(f"An error ocurred during execution: {e}")
+    finally:
+        if conn in locals():
+            conn.close()
+            print("DB connection closed")
+
+main()
